@@ -71,11 +71,11 @@ def get_songs(path):
             raise e           
     return songs
 
-songs = get_songs('Pop_Music_Midi')
-print "{} songs processed".format(len(songs))
+songs = get_songs('E:\GitHub\Music_AI\midi_data')
+print ("{} songs processed".format(len(songs)))
 
 
-###################################################
+###################################################Pop_Music_Midi
 
 ### HyperParameters
 # First, let's take a look at the hyperparameters of our model:
@@ -84,7 +84,7 @@ lowest_note = midi_manipulation.lowerBound #the index of the lowest note on the 
 highest_note = midi_manipulation.upperBound #the index of the highest note on the piano roll
 note_range = highest_note-lowest_note #the note range
 
-num_timesteps  = 15 #This is the number of timesteps that we will create at a time
+num_timesteps  = 50 #This is the number of timesteps that we will create at a time
 n_visible      = 2*note_range*num_timesteps #This is the size of the visible layer. 
 n_hidden       = 50 #This is the size of the hidden layer
 
@@ -121,8 +121,9 @@ def gibbs_sample(k):
 
     #Run gibbs steps for k iterations
     ct = tf.constant(0) #counter
-    [_, _, x_sample] = control_flow_ops.While(lambda count, num_iter, *args: count < num_iter,
-                                         gibbs_step, [ct, tf.constant(k), x], 1, False)
+#    [_, _, x_sample] = control_flow_ops.While(lambda count, num_iter, *args: count < num_iter,
+#                                         gibbs_step, [ct, tf.constant(k), x], 1, False)
+    [ct,k,x_sample] = gibbs_step(ct, tf.constant(k), x)
     #This is not strictly necessary in this implementation, but if you want to adapt this code to use one of TensorFlow's
     #optimizers, you need this in order to stop tensorflow from propagating gradients back through the gibbs step
     x_sample = tf.stop_gradient(x_sample) 
@@ -139,9 +140,9 @@ h_sample = sample(tf.sigmoid(tf.matmul(x_sample, W) + bh))
 
 #Next, we update the values of W, bh, and bv, based on the difference between the samples that we drew and the original values
 size_bt = tf.cast(tf.shape(x)[0], tf.float32)
-W_adder  = tf.mul(lr/size_bt, tf.sub(tf.matmul(tf.transpose(x), h), tf.matmul(tf.transpose(x_sample), h_sample)))
-bv_adder = tf.mul(lr/size_bt, tf.reduce_sum(tf.sub(x, x_sample), 0, True))
-bh_adder = tf.mul(lr/size_bt, tf.reduce_sum(tf.sub(h, h_sample), 0, True))
+W_adder  = tf.multiply(lr/size_bt, tf.subtract(tf.matmul(tf.transpose(x), h), tf.matmul(tf.transpose(x_sample), h_sample)))
+bv_adder = tf.multiply(lr/size_bt, tf.reduce_sum(tf.subtract(x, x_sample), 0, True))
+bh_adder = tf.multiply(lr/size_bt, tf.reduce_sum(tf.subtract(h, h_sample), 0, True))
 #When we do sess.run(updt), TensorFlow will run all 3 update steps
 updt = [W.assign_add(W_adder), bv.assign_add(bv_adder), bh.assign_add(bh_adder)]
 
@@ -160,8 +161,8 @@ with tf.Session() as sess:
             #The songs are stored in a time x notes format. The size of each song is timesteps_in_song x 2*note_range
             #Here we reshape the songs so that each training example is a vector with num_timesteps x 2*note_range elements
             song = np.array(song)
-            song = song[:np.floor(song.shape[0]/num_timesteps)*num_timesteps]
-            song = np.reshape(song, [song.shape[0]/num_timesteps, song.shape[1]*num_timesteps])
+            song = song[:int(np.floor(song.shape[0]/num_timesteps)*num_timesteps)]
+            song = np.reshape(song, [int(song.shape[0]/num_timesteps), song.shape[1]*num_timesteps])
             #Train the RBM on batch_size examples at a time
             for i in range(1, len(song), batch_size): 
                 tr_x = song[i:i+batch_size]
@@ -169,7 +170,7 @@ with tf.Session() as sess:
 
     #Now the model is fully trained, so let's make some music! 
     #Run a gibbs chain where the visible nodes are initialized to 0
-    sample = gibbs_sample(1).eval(session=sess, feed_dict={x: np.zeros((10, n_visible))})
+    sample = gibbs_sample(1).eval(session=sess, feed_dict={x: np.zeros((4, n_visible))})
     for i in range(sample.shape[0]):
         if not any(sample[i,:]):
             continue
